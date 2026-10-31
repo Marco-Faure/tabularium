@@ -6,6 +6,11 @@ Notable changes to Tabularium. The format follows
 
 ## [Unreleased]
 
+### Added
+- `scripts/surfaces.py --check` now also fails when `docs/spec/models-matrix.md` is missing or
+  no longer matches the code, and names the command that regenerates it. CI and
+  `scripts/check.sh` already run `--check`, so the generated matrix can no longer drift silently.
+
 ## [0.4.0] - 2026-10-27
 
 ### Fixed

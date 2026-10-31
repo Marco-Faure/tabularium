@@ -149,5 +149,6 @@ best evidence of why the invariants exist.
 - **Structure**: `table_detect` is pure but deprecated and still in `services/`; the
   adapters could be read as one layer once the filesystem moves there too (paths, crops,
   run directories are still touched directly).
-- **Process**: a CI check that regenerates `docs/spec/models-matrix.md` and diffs it, so the
-  generated file cannot drift.
+- **Process**: done — `scripts/surfaces.py --check` (run by CI and `scripts/check.sh`) now
+  regenerates `docs/spec/models-matrix.md` in memory and fails when the committed file differs;
+  `backend/tests/test_surfaces_matrix.py` pins it.

@@ -8,10 +8,13 @@ truth, so nothing here can drift.
     python scripts/surfaces.py                 # markdown matrix
     python scripts/surfaces.py --verbose       # matrix + the reason of every cell
     python scripts/surfaces.py --json          # machine-readable
-    python scripts/surfaces.py --check         # exit 1 if a surface is missing
+    python scripts/surfaces.py --check         # exit 1 if a surface is missing or the
+                                               # committed matrix is stale
+    python scripts/surfaces.py --write docs/spec/models-matrix.md
 
 `--check` is what CI runs and what `AGENTS.md` points at: it is the cheap proof that
-a model is complete across the whole application, not only in the file that changed.
+a model is complete across the whole application, not only in the file that changed,
+and that the committed matrix still says what the code says.
 """
 from __future__ import annotations
 
@@ -32,6 +35,10 @@ if not os.environ.get("TABULARIUM_ROOT"):
     os.environ["TABULARIUM_ROOT"] = tempfile.mkdtemp(prefix="tabularium-surfaces-")
 
 from app.services import model_adapters, model_surface  # noqa: E402
+
+# The committed copy of the matrix. `--check` fails when it differs from the code.
+MATRIX_PATH = ROOT / "docs" / "spec" / "models-matrix.md"
+MATRIX_REL = MATRIX_PATH.relative_to(ROOT).as_posix()
 
 MARKS = {"declared": "✓", "not_applicable": "○", "missing": "✗"}
 
@@ -95,7 +102,17 @@ def _json(rows: list[model_surface.ModelRow]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
-def _check(rows: list[model_surface.ModelRow]) -> int:
+def _matrix_problem(rows: list[model_surface.ModelRow], matrix: Path) -> str | None:
+    """Why the committed matrix does not match the code, or None when it does."""
+    fix = f"run python scripts/surfaces.py --write {MATRIX_REL}"
+    if not matrix.is_file():
+        return f"{matrix} is missing: {fix}"
+    if matrix.read_text(encoding="utf-8") != _markdown(rows):
+        return f"{matrix} is out of date: {fix}"
+    return None
+
+
+def _check(rows: list[model_surface.ModelRow], *, matrix: Path = MATRIX_PATH) -> int:
     problems = [
         f"{row.adapter_id}.{surface}: {row.state(surface).reason}"
         for row in rows
@@ -103,6 +120,7 @@ def _check(rows: list[model_surface.ModelRow]) -> int:
         if row.state(surface).state == "missing"
     ]
     problems += model_surface.vocabulary_violations() + model_surface.stale_excuses()
+    stale = _matrix_problem(rows, matrix)
     if problems:
         print("model surfaces are incomplete:", file=sys.stderr)
         for problem in problems:
@@ -113,7 +131,10 @@ def _check(rows: list[model_surface.ModelRow]) -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"model surfaces: {len(rows)} models, all required surfaces declared")
+    if stale:
+        print(f"model matrix: {stale}", file=sys.stderr)
+        return 1
+    print(f"model surfaces: {len(rows)} models, all required surfaces declared, matrix current")
     return 0
 
 
@@ -121,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--verbose", action="store_true", help="print the reason of every cell")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
-    parser.add_argument("--check", action="store_true", help="exit 1 if a surface is missing")
+    parser.add_argument("--check", action="store_true", help="exit 1 if a surface is missing or the matrix is stale")
     parser.add_argument(
         "--write", metavar="PATH",
         help="write the markdown matrix to a file (generated: never edit it by hand)",
